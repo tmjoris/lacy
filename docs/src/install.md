@@ -30,6 +30,14 @@ brew install timothebot/tap/lacy
 yay -S lacy # or whatever aur helper you're using
 ```
 
+## Windows (x64 & Windows on Arm)
+
+```sh
+cargo install lacy
+```
+
+Prebuilt binaries are also published on the [GitHub Releases](https://github.com/timothebot/lacy/releases) page for both `x86_64-pc-windows-msvc` (Windows x64) and `aarch64-pc-windows-msvc` (Windows on Arm — runs natively on Snapdragon X and other Arm64 devices, no x64 emulation). Download the `.zip` matching your architecture, extract `lacy.exe` to a folder on your `PATH`, then continue with [setup](./setup.md#powershell).
+
 ## NixOS ❄️
 
 There are a couple of ways to get `lacy` up and running on your Nix system. Both methods require adding `lacy` to your `flake.nix` inputs.

@@ -24,6 +24,10 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
 
     steps:
       - name: Checkout repository
@@ -60,12 +64,37 @@ jobs:
           args: --release --locked --target=${{ matrix.target }} --color=always --verbose
           use-cross: ${{ runner.os == 'Linux' }}
       - name: Package (*nix)
+        if: ${{ runner.os != 'Windows' }}
         env:
           BINARY_NAME: "lacy"
         run: |
           tar -c -C target/${{ matrix.target }}/release/ $BINARY_NAME |
               gzip --best > \
               $BINARY_NAME-${{ steps.get_version.outputs.value }}-${{ matrix.target }}.tar.gz
+      - name: Package (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        env:
+          BINARY_NAME: "lacy"
+        run: |
+          $zipName = "$env:BINARY_NAME-${{ steps.get_version.outputs.value }}-${{ matrix.target }}.zip"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" -DestinationPath $zipName
+      - name: Verify architecture (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          $exe = "target/${{ matrix.target }}/release/lacy.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          $peOffset = [BitConverter]::ToUInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          $machineHex = "0x{0:X}" -f $machine
+          $expected = if ("${{ matrix.target }}" -eq "aarch64-pc-windows-msvc") { 0xAA64 } else { 0x8664 }
+          Write-Host "Built target: ${{ matrix.target }} -> PE machine: $machineHex"
+          if ($machine -ne $expected) {
+            Write-Error "Architecture mismatch! Expected 0x$($expected.ToString('X')) but got $machineHex"
+            exit 1
+          }
+          Write-Host "Architecture verified OK"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
