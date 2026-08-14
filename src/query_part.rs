@@ -48,7 +48,14 @@ impl QueryPart {
                 vec![dir]
             }
             QueryPart::Root => {
-                let Ok(dir) = Directory::try_from(PathBuf::from("/").as_path()) else {
+                // Canonicalize rather than using the literal "/": on Unix "/" is already the
+                // true root so this is a no-op, but on Windows "/" is only drive-relative (it
+                // resolves against whichever drive is current, without a drive letter attached).
+                // Canonicalizing turns it into the real, unambiguous root (e.g. "C:\\") instead
+                // of returning a bare "/" that callers other than the `prompt` command (which
+                // separately canonicalizes) would see as-is.
+                let root_path = std::fs::canonicalize("/").unwrap_or_else(|_| PathBuf::from("/"));
+                let Ok(dir) = Directory::try_from(root_path.as_path()) else {
                     eprintln!("Couldn't create Directory from root!");
                     return vec![];
                 };
