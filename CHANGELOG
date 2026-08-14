@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Native Windows support: `x86_64-pc-windows-msvc` (Windows x64) and `aarch64-pc-windows-msvc` (Windows on Arm) are now built, tested, and released via CI on GitHub's hosted `windows-latest` and `windows-11-arm` runners. The Arm64 build runs natively (no x64 emulation).
+
 ## [0.7.0] - 2026-04-01
 
 ### Added
