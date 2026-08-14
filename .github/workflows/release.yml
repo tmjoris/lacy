@@ -139,10 +139,6 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: [release]
-    # Only attempt this when a real crates.io token is configured - forks and
-    # test branches (e.g. those built while porting to a new target platform)
-    # never have this secret, and shouldn't fail CI trying to use it.
-    if: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -151,4 +147,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Publish to crates.io
+        # Only attempt this when a real crates.io token is configured - forks
+        # and test branches (e.g. those built while porting to a new target
+        # platform) never have this secret, and shouldn't fail CI trying to
+        # use it. The `secrets` context can only be referenced at the step
+        # level (not in a job-level `if:`), so the guard lives here.
+        if: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
