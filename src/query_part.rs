@@ -1,6 +1,8 @@
 use std::{env::home_dir, path::PathBuf};
 
-use crate::directory::{scored_directories, sub_directories, Directory, ScoredDirectory};
+use crate::directory::{
+    get_current_directory, scored_directories, sub_directories, Directory, ScoredDirectory,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum QueryPart {
@@ -48,13 +50,24 @@ impl QueryPart {
                 vec![dir]
             }
             QueryPart::Root => {
-                // Canonicalize rather than using the literal "/": on Unix "/" is already the
-                // true root so this is a no-op, but on Windows "/" is only drive-relative (it
-                // resolves against whichever drive is current, without a drive letter attached).
-                // Canonicalizing turns it into the real, unambiguous root (e.g. "C:\\") instead
-                // of returning a bare "/" that callers other than the `prompt` command (which
-                // separately canonicalizes) would see as-is.
-                let root_path = std::fs::canonicalize("/").unwrap_or_else(|_| PathBuf::from("/"));
+                let bare_root = PathBuf::from("/");
+                // On Unix "/" is already an absolute, unambiguous root, so this is a
+                // no-op. On Windows a bare "/" is only drive-relative (no drive letter
+                // attached), so qualify it against the current directory's drive
+                // instead - e.g. "C:/" - matching what any other caller comparing
+                // against a real absolute path would expect.
+                let root_path = if bare_root.is_absolute() {
+                    bare_root
+                } else {
+                    // Path::join intentionally replaces just the root component while
+                    // keeping the base's drive letter when the joined-in path itself
+                    // starts with a separator - that's exactly the "reset to this
+                    // drive's root" behavior wanted here (verified: joining "/" onto
+                    // a "C:\..." cwd yields "C:/", not the cwd unchanged or a bare "/").
+                    #[allow(clippy::join_absolute_paths)]
+                    let drive_root = get_current_directory().join("/");
+                    drive_root
+                };
                 let Ok(dir) = Directory::try_from(root_path.as_path()) else {
                     eprintln!("Couldn't create Directory from root!");
                     return vec![];
@@ -134,6 +147,20 @@ mod tests {
         assert_eq!(
             QueryPart::Text(String::from("hello")),
             QueryPart::from("hello")
+        );
+    }
+
+    #[test]
+    fn test_root_resolves_to_absolute_path() {
+        // Regression test for a bug where QueryPart::Root returned a bare "/"
+        // unchanged on Windows, where it's only drive-relative rather than a
+        // real absolute path (unlike Unix, where "/" already is absolute).
+        let dirs = QueryPart::Root.matching_directories(&[]);
+        assert_eq!(dirs.len(), 1);
+        assert!(
+            dirs[0].location().is_absolute(),
+            "root should always resolve to an absolute path, got: {:?}",
+            dirs[0].location()
         );
     }
 }
