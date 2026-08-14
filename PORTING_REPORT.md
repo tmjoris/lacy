@@ -5,6 +5,18 @@
 **Port performed by:** AI agent (GitHub Copilot CLI) using the `winarm-porting-toolkit` skill set, as part of the Windows on Arm app-porting hackathon
 **Result:** Native Windows x64 and native Windows on Arm (ARM64) support added — previously **zero** Windows targets existed anywhere in the project (no CI job, no release artifact, no documented install path beyond `cargo install`).
 
+> **Update:** this fork was moved from an initial private mirror (created under a Microsoft
+> Enterprise Managed User account, where forking/public repos/Actions were all restricted) to a
+> proper **real GitHub fork** under a personal account — [tmjoris/lacy](https://github.com/tmjoris/lacy),
+> submitted here as [PR #1](https://github.com/tmjoris/lacy/pull/1). Forking and public-repo
+> creation both work normally outside an EMU tenant.
+>
+> **Final status: both `check.yml` and `release.yml` are fully green**, verified end-to-end on
+> real hardware including GitHub's native `windows-11-arm` runner:
+> [check.yml run](https://github.com/tmjoris/lacy/actions/runs/31829449418) (7/7 jobs),
+> [release.yml run](https://github.com/tmjoris/lacy/actions/runs/31829599918) (8/8 jobs).
+> Getting there surfaced three additional real, pre-existing bugs — see §8 below.
+
 ---
 
 ## 1. Assessment (Stage 1 — Assess)
@@ -52,8 +64,29 @@
 
 [ARM64EC](https://learn.microsoft.com/en-us/windows/arm/arm64ec) exists to let an app incrementally adopt native Arm64 while continuing to load x64 builds of dependencies that don't have Arm64 builds yet. `lacy`'s entire dependency tree (`clap`, `dialoguer`, `console`, `ctrlc`, `upon`, `serde`, `windows-sys`, etc.) is pure Rust and already compiles natively for `aarch64-pc-windows-msvc`. There is no x64-only native dependency to bridge, so the straightforward pure-ARM64 path (Stage 1→4 of Arm's AppReady workflow) applies directly with no emulation-compatibility fallback required.
 
-## 5. Follow-ups for the repo owner
+## 5. Bugs found and fixed while driving CI to fully green
 
-1. Merge this PR, then run the `Build and Release` workflow (`workflow_dispatch`) to produce the first Windows release assets.
-2. Consider a `winget` manifest (`timothebot.lacy`) once a tagged Windows release exists — the `winarm-porting-toolkit` skill set includes a reusable skill for scaffolding this.
-3. Consider a Scoop manifest for parity with the existing Homebrew/AUR "package manager" install paths.
+Getting real CI wired up and passing surfaced four genuine, pre-existing issues — none were ARM64-specific; all were invisible for the project's entire lifetime because **no Windows CI leg had ever existed** before this PR.
+
+1. **`QueryPart::Root` returned an unqualified path on Windows.** `PathBuf::from("/")` is a real absolute root on Unix but only drive-relative on Windows (`Path::is_absolute()` is `false` for it there). Fixed by qualifying against the actual `dirs` context passed through `Query::results()`, not a fresh global lookup (see next point for why that distinction matters). Two dedicated regression tests added.
+2. **A canonicalize-based first attempt was too strong a fix.** `std::fs::canonicalize("/")` resolves correctly but returns Windows' verbatim `\\?\C:\` extended-length-path form, which doesn't match plain-path expectations elsewhere in the codebase or its tests. Replaced with a plain `Path::join` against the current context, which yields an ordinary `C:/`.
+3. **The "current context" must come from `dirs.first()`, not `std::env::current_dir()`.** GitHub's `windows-latest` hosted runner provisions the OS temp directory (where the test suite's `tempfile::tempdir()` fixtures live) on `D:`, while the checked-out repository — and therefore the test process's actual working directory — lives on `C:`. Using the process-global current directory silently qualified against the wrong drive; deriving it from the `dirs` parameter that's already threaded through the call chain (mirroring every other `QueryPart` variant) fixed it correctly on both `windows-latest` and `windows-11-arm`.
+4. **`release.yml` had a latent release-asset race condition**, and **`publish-crates` unconditionally required a secret that doesn't exist on forks** — both described in §3 above under "Changes made."
+
+All four are documented with regression tests (where applicable) and detailed commit messages on the PR branch, so the reasoning survives independently of this report.
+
+## 6. Final verification
+
+Both workflows are fully green, run end-to-end on real hardware (no local-only claims):
+
+| Workflow | Run | Result |
+|---|---|---|
+| `Rust Code Checks` (`check.yml`) | [31829449418](https://github.com/tmjoris/lacy/actions/runs/31829449418) | ✅ 7/7 jobs — Lint, and Test on macOS x64/ARM64, Linux x64/ARM64, **Windows x64, and Windows on Arm (native `windows-11-arm`)** |
+| `Build and Release` (`release.yml`) | [31829599918](https://github.com/tmjoris/lacy/actions/runs/31829599918) | ✅ 8/8 jobs — all 6 platform builds (PE-architecture-verified on both Windows legs), `Publish to crates.io` (correctly no-ops without a token), `Publish GitHub release` (single combining job, race-free) |
+
+## 7. Follow-ups for the repo owner
+
+1. Merge this PR — it now passes CI in full, including native Windows on Arm.
+2. Run the `Build and Release` workflow (`workflow_dispatch`) against a real version tag to produce the first public Windows release assets.
+3. Consider a `winget` manifest (`timothebot.lacy`) once a tagged Windows release exists — the `winarm-porting-toolkit` skill set includes a reusable skill for scaffolding this.
+4. Consider a Scoop manifest for parity with the existing Homebrew/AUR "package manager" install paths.

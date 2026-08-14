@@ -103,14 +103,35 @@ jobs:
             *.tar.gz
             *.zip
             Cargo.lock
+
+  publish-release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs: [release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Get version
+        id: get_version
+        uses: SebRollen/toml-action@v1.2.0
+        with:
+          file: Cargo.toml
+          field: package.version
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
-            *.tar.gz
-            *.zip
-            Cargo.lock
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/Cargo.lock
           name: v${{ steps.get_version.outputs.value }}
           tag_name: ${{ github.ref_name }}
 
@@ -126,4 +147,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        # Only attempt this when a real crates.io token is configured - forks
+        # and test branches (e.g. those built while porting to a new target
+        # platform) never have this secret, and shouldn't fail CI trying to
+        # use it. GitHub's workflow-dispatch validator rejects any `secrets.*`
+        # reference inside an `if:` expression (job- or step-level), so the
+        # presence check has to happen inside the shell script itself instead.
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "No CARGO_REGISTRY_TOKEN secret configured - skipping crates.io publish (expected on forks/test branches)."
+            exit 0
+          fi
+          cargo publish --token "$CARGO_REGISTRY_TOKEN"
