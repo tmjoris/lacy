@@ -5,6 +5,16 @@
 **Port performed by:** AI agent (GitHub Copilot CLI) using the `winarm-porting-toolkit` skill set, as part of the Windows on Arm app-porting hackathon
 **Result:** Native Windows x64 and native Windows on Arm (ARM64) support added — previously **zero** Windows targets existed anywhere in the project (no CI job, no release artifact, no documented install path beyond `cargo install`).
 
+> **Update:** this fork was moved from an initial private mirror (created under a Microsoft
+> Enterprise Managed User account, where forking/public repos/Actions were all restricted) to a
+> proper **real GitHub fork** under a personal account — [tmjoris/lacy](https://github.com/tmjoris/lacy),
+> submitted here as [PR #1](https://github.com/tmjoris/lacy/pull/1). Forking and public-repo
+> creation both work normally outside an EMU tenant. The one remaining step is a one-time,
+> one-click "enable Actions on this fork" confirmation in the GitHub UI (a security default on
+> *every* fresh fork, unrelated to the earlier EMU restriction) — after which this PR's
+> `check.yml` run and a manually-dispatched `release.yml` run will both execute for real on
+> GitHub's native `windows-11-arm` hardware.
+
 ---
 
 ## 1. Assessment (Stage 1 — Assess)
